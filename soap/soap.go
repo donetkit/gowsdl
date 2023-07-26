@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -579,7 +579,7 @@ func (s *Client) call(ctx context.Context, soapAction string, request, response 
 	} else if mmaBoundary != "" {
 		dec = newMmaDecoder(res.Body, mmaBoundary)
 	} else {
-		dec = xml.NewDecoder(res.Body)
+		dec = xml.NewDecoder(NewValidUTF8Reader(res.Body))
 	}
 
 	if err := dec.Decode(respEnvelope); err != nil {
@@ -593,7 +593,7 @@ func (s *Client) call(ctx context.Context, soapAction string, request, response 
 }
 
 func ExtractError(resp *http.Response) error {
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
