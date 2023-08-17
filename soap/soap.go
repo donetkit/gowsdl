@@ -6,8 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
+	"github.com/eyetowers/gowsdl/digest_auth_client"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -505,45 +505,50 @@ func (s *Client) call(ctx context.Context, soapAction string, request, response 
 		return err
 	}
 
-	req, err := http.NewRequest("POST", s.url, buffer)
+	str, _ := io.ReadAll(buffer)
+
+	digestRequest := digest_auth_client.NewRequest(s.opts.soapAuth.Login, s.opts.soapAuth.Password, "POST", s.url, string(str))
+
+	res, err := digestRequest.Execute()
+	//req, err := http.NewRequest("POST", s.url, buffer)
 	if err != nil {
 		return err
 	}
-	if s.opts.auth != nil {
-		req.SetBasicAuth(s.opts.auth.Login, s.opts.auth.Password)
-	}
-
-	req = req.WithContext(ctx)
-
-	if s.opts.mtom {
-		req.Header.Add("Content-Type", fmt.Sprintf(mtomContentType, encoder.(*mtomEncoder).Boundary()))
-	} else if s.opts.mma {
-		req.Header.Add("Content-Type", fmt.Sprintf(mmaContentType, encoder.(*mmaEncoder).Boundary()))
-	} else {
-		req.Header.Add("Content-Type", "application/soap+xml; charset=\"utf-8\"")
-	}
-	req.Header.Set("User-Agent", "gowsdl/0.1")
-	if s.opts.httpHeaders != nil {
-		for k, v := range s.opts.httpHeaders {
-			req.Header.Set(k, v)
-		}
-	}
-	req.Close = true
-
-	client := s.opts.client
-	if client == nil {
-		tr := &http.Transport{
-			TLSClientConfig: s.opts.tlsCfg,
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				d := net.Dialer{Timeout: s.opts.timeout}
-				return d.DialContext(ctx, network, addr)
-			},
-			TLSHandshakeTimeout: s.opts.tlshshaketimeout,
-		}
-		client = &http.Client{Timeout: s.opts.contimeout, Transport: tr}
-	}
-
-	res, err := client.Do(req)
+	//if s.opts.auth != nil {
+	//	req.SetBasicAuth(s.opts.auth.Login, s.opts.auth.Password)
+	//}
+	//
+	//req = req.WithContext(ctx)
+	//
+	//if s.opts.mtom {
+	//	req.Header.Add("Content-Type", fmt.Sprintf(mtomContentType, encoder.(*mtomEncoder).Boundary()))
+	//} else if s.opts.mma {
+	//	req.Header.Add("Content-Type", fmt.Sprintf(mmaContentType, encoder.(*mmaEncoder).Boundary()))
+	//} else {
+	//	req.Header.Add("Content-Type", "application/soap+xml; charset=\"utf-8\"")
+	//}
+	//req.Header.Set("User-Agent", "gowsdl/0.1")
+	//if s.opts.httpHeaders != nil {
+	//	for k, v := range s.opts.httpHeaders {
+	//		req.Header.Set(k, v)
+	//	}
+	//}
+	//req.Close = true
+	//
+	//client := s.opts.client
+	//if client == nil {
+	//	tr := &http.Transport{
+	//		TLSClientConfig: s.opts.tlsCfg,
+	//		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	//			d := net.Dialer{Timeout: s.opts.timeout}
+	//			return d.DialContext(ctx, network, addr)
+	//		},
+	//		TLSHandshakeTimeout: s.opts.tlshshaketimeout,
+	//	}
+	//	client = &http.Client{Timeout: s.opts.contimeout, Transport: tr}
+	//}
+	//
+	//res, err := client.Do(req)
 	if err != nil {
 		return err
 	}
