@@ -149,7 +149,7 @@ func TestComputeA2(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dr := &DigestRequest{
 				Method: "method",
-				Body:   "body",
+				//Body:   "body",
 				Wa: &wwwAuthenticate{
 					Qop: tc.qop,
 				},

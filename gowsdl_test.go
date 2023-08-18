@@ -33,9 +33,9 @@ func TestElementGenerationDoesntCommentOutStructProperty(t *testing.T) {
 		t.Error(err)
 	}
 
-	if strings.Contains(string(resp["types"]), "// this is a comment  GetInfoResult string `xml:\"GetInfoResult,omitempty\"`") {
+	if strings.Contains(string(resp["types"]["types"]), "// this is a comment  GetInfoResult string `xml:\"GetInfoResult,omitempty\"`") {
 		t.Error("Type comment should not comment out struct type property")
-		t.Error(string(resp["types"]))
+		t.Error(string(resp["types"]["types"]))
 	}
 }
 
@@ -49,7 +49,7 @@ func TestComplexTypeWithInlineSimpleType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actual, err := getTypeDeclaration(resp, "GetInfo")
+	actual, err := getTypeDeclaration(resp["types"], "GetInfo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +74,9 @@ func TestAttributeRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actual, err := getTypeDeclaration(resp, "ResponseStatus")
+	actual, err := getTypeDeclaration(resp["types"], "ResponseStatus")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -108,9 +108,9 @@ func TestElementWithLocalSimpleType(t *testing.T) {
 	}
 
 	// Type declaration
-	actual, err := getTypeDeclaration(resp, "ElementWithLocalSimpleType")
+	actual, err := getTypeDeclaration(resp["types"], "ElementWithLocalSimpleType")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -121,9 +121,9 @@ func TestElementWithLocalSimpleType(t *testing.T) {
 	}
 
 	// Const declaration of first enum value
-	actual, err = getTypeDeclaration(resp, "ElementWithLocalSimpleTypeEnum1")
+	actual, err = getTypeDeclaration(resp["types"], "ElementWithLocalSimpleTypeEnum1")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -134,9 +134,9 @@ func TestElementWithLocalSimpleType(t *testing.T) {
 	}
 
 	// Const declaration of second enum value
-	actual, err = getTypeDeclaration(resp, "ElementWithLocalSimpleTypeEnum2")
+	actual, err = getTypeDeclaration(resp["types"], "ElementWithLocalSimpleTypeEnum2")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -159,9 +159,9 @@ func TestDateTimeType(t *testing.T) {
 	}
 
 	// Type declaration
-	actual, err := getTypeDeclaration(resp, "StartDate")
+	actual, err := getTypeDeclaration(resp["types"], "StartDate")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -172,9 +172,9 @@ func TestDateTimeType(t *testing.T) {
 	}
 
 	// Method declaration MarshalXML
-	actual, err = getFuncDeclaration(resp, "MarshalXML", "StartDate")
+	actual, err = getFuncDeclaration(resp["types"], "MarshalXML", "StartDate")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -187,9 +187,9 @@ func TestDateTimeType(t *testing.T) {
 	}
 
 	// Method declaration UnmarshalXML
-	actual, err = getFuncDeclaration(resp, "UnmarshalXML", "StartDate")
+	actual, err = getFuncDeclaration(resp["types"], "UnmarshalXML", "StartDate")
 	if err != nil {
-		fmt.Println(string(resp["types"]))
+		fmt.Println(string(resp["types"]["types"]))
 		t.Fatal(err)
 	}
 
@@ -221,10 +221,10 @@ func TestVboxGeneratesWithoutSyntaxErrors(t *testing.T) {
 		}
 
 		data := new(bytes.Buffer)
-		data.Write(resp["header"])
-		data.Write(resp["types"])
-		data.Write(resp["operations"])
-		data.Write(resp["soap"])
+		data.Write(resp["header"]["types"])
+		data.Write(resp["types"]["types"])
+		data.Write(resp["operations"]["types"])
+		data.Write(resp["soap"]["types"])
 
 		_, err = format.Source(data.Bytes())
 		if err != nil {
@@ -246,7 +246,7 @@ func TestEnumerationsGeneratedCorrectly(t *testing.T) {
 			t.Error(err)
 		}
 		re := regexp.MustCompile(varName + " " + typeName + " = \"([^\"]*)\"")
-		matches := re.FindStringSubmatch(string(resp["types"]))
+		matches := re.FindStringSubmatch(string(resp["types"]["types"]))
 
 		if len(matches) != 2 {
 			t.Errorf("No match or too many matches found for %s", varName)
@@ -271,7 +271,7 @@ func TestComplexTypeGeneratedCorrectly(t *testing.T) {
 		t.Error(err)
 	}
 
-	decl, err := getTypeDeclaration(resp, "WorkerObjectIDType")
+	decl, err := getTypeDeclaration(resp["types"], "WorkerObjectIDType")
 
 	expected := "type WorkerObjectIDType struct"
 	re := regexp.MustCompile(expected)
@@ -298,10 +298,10 @@ func TestEPCISWSDL(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := new(bytes.Buffer)
-	data.Write(resp["header"])
-	data.Write(resp["types"])
-	data.Write(resp["operations"])
-	data.Write(resp["soap"])
+	data.Write(resp["header"]["types"])
+	data.Write(resp["types"]["types"])
+	data.Write(resp["operations"]["types"])
+	data.Write(resp["soap"]["types"])
 
 	// go fmt the generated code
 	source, err := format.Source(data.Bytes())

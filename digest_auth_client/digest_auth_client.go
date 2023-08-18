@@ -1,24 +1,35 @@
 package digest_auth_client
 
 import (
-	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"time"
 )
 
+type BasicAuth struct {
+	Login    string
+	Password string
+}
+
 type DigestRequest struct {
-	Body       string
-	Method     string
-	Password   string
-	URI        string
-	Username   string
-	Header     http.Header
-	Auth       *authorization
-	Wa         *wwwAuthenticate
-	CertVal    bool
-	HTTPClient *http.Client
+	Body                io.Reader
+	Method              string
+	Password            string
+	URI                 string
+	Username            string
+	Header              http.Header
+	Auth                *authorization
+	Wa                  *wwwAuthenticate
+	CertVal             bool
+	HTTPClient          *http.Client
+	Timeout             time.Duration
+	TLSHandshakeTimeout time.Duration
+	TLSClientConfig     *tls.Config
+	BasicAuth           *BasicAuth
 }
 
 type DigestTransport struct {
@@ -28,8 +39,8 @@ type DigestTransport struct {
 }
 
 // NewRequest creates a new DigestRequest object
-func NewRequest(username, password, method, uri, body string) DigestRequest {
-	dr := DigestRequest{}
+func NewRequest(username, password, method, uri string, body io.Reader) DigestRequest {
+	dr := DigestRequest{Timeout: time.Second * 15, TLSHandshakeTimeout: time.Second * 15}
 	dr.UpdateRequest(username, password, method, uri, body)
 	dr.CertVal = true
 	return dr
@@ -51,19 +62,25 @@ func (dr *DigestRequest) getHTTPClient() *http.Client {
 	if !dr.CertVal {
 		tlsConfig.InsecureSkipVerify = true
 	}
-
-	return &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tlsConfig,
+	tr := &http.Transport{
+		TLSClientConfig: dr.TLSClientConfig,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			d := net.Dialer{Timeout: dr.Timeout}
+			return d.DialContext(ctx, network, addr)
 		},
+		TLSHandshakeTimeout: dr.TLSHandshakeTimeout,
 	}
+	return &http.Client{
+		Timeout:   dr.Timeout,
+		Transport: tr,
+	}
+
 }
 
 // UpdateRequest is called when you want to reuse an existing
 //
 //	DigestRequest connection with new request information
-func (dr *DigestRequest) UpdateRequest(username, password, method, uri, body string) *DigestRequest {
+func (dr *DigestRequest) UpdateRequest(username, password, method, uri string, body io.Reader) *DigestRequest {
 	dr.Body = body
 	dr.Method = method
 	dr.Password = password
@@ -80,14 +97,14 @@ func (dt *DigestTransport) RoundTrip(req *http.Request) (resp *http.Response, er
 	method := req.Method
 	uri := req.URL.String()
 
-	var body string
-	if req.Body != nil {
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(req.Body)
-		body = buf.String()
-	}
+	//var body string
+	//if req.Body != nil {
+	//	buf := new(bytes.Buffer)
+	//	buf.ReadFrom(req.Body)
+	//	body = buf.String()
+	//}
 
-	dr := NewRequest(username, password, method, uri, body)
+	dr := NewRequest(username, password, method, uri, req.Body)
 	if dt.HTTPClient != nil {
 		dr.HTTPClient = dt.HTTPClient
 	}
@@ -97,16 +114,29 @@ func (dt *DigestTransport) RoundTrip(req *http.Request) (resp *http.Response, er
 
 // Execute initialise the request and get a response
 func (dr *DigestRequest) Execute() (resp *http.Response, err error) {
+	return dr.ExecuteContext(nil)
+}
 
+// ExecuteContext Context initialise the request and get a response
+func (dr *DigestRequest) ExecuteContext(ctx context.Context) (resp *http.Response, err error) {
 	if dr.Auth != nil {
 		return dr.executeExistingDigest()
 	}
-
 	var req *http.Request
-	if req, err = http.NewRequest(dr.Method, dr.URI, bytes.NewReader([]byte(dr.Body))); err != nil {
+	if req, err = http.NewRequest(dr.Method, dr.URI, dr.Body); err != nil {
 		return nil, err
 	}
+
+	if ctx != nil {
+		req.WithContext(ctx)
+	}
+
 	req.Header = dr.Header
+	req.Close = true
+
+	if dr.BasicAuth != nil {
+		req.SetBasicAuth(dr.BasicAuth.Login, dr.BasicAuth.Password)
+	}
 
 	client := dr.getHTTPClient()
 
@@ -164,7 +194,7 @@ func (dr *DigestRequest) executeExistingDigest() (resp *http.Response, err error
 func (dr *DigestRequest) executeRequest(authString string) (resp *http.Response, err error) {
 	var req *http.Request
 
-	if req, err = http.NewRequest(dr.Method, dr.URI, bytes.NewReader([]byte(dr.Body))); err != nil {
+	if req, err = http.NewRequest(dr.Method, dr.URI, dr.Body); err != nil {
 		return nil, err
 	}
 	req.Header = dr.Header
