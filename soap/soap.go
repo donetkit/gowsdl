@@ -474,10 +474,10 @@ func (s *Client) call(ctx context.Context, soapAction string, request, response 
 	envelope := SOAPEnvelope{}
 
 	headers := append([]any{}, s.headers...)
-	//if s.opts.soapAuth != nil {
-	//	sec := NewSecurity(s.opts.soapAuth.Login, s.opts.soapAuth.Password)
-	//	headers = append(headers, sec)
-	//}
+	if s.opts.soapAuth != nil {
+		sec := NewSecurity(s.opts.soapAuth.Login, s.opts.soapAuth.Password)
+		headers = append(headers, sec)
+	}
 	if len(headers) > 0 {
 		envelope.Header = &SOAPHeader{
 			Headers: headers,
