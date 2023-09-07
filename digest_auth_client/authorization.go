@@ -106,15 +106,7 @@ func (ah *authorization) computeA2(dr *DigestRequest) string {
 
 	if strings.Contains(dr.Wa.Qop, "auth-int") {
 		ah.Qop = "auth-int"
-
-		var buffer string
-		if dr.Body != nil {
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(dr.Body)
-			buffer = buf.String()
-		}
-
-		return fmt.Sprintf("%s:%s:%s", dr.Method, ah.URI, ah.hash(buffer))
+		return fmt.Sprintf("%s:%s:%s", dr.Method, ah.URI, ah.hash(dr.Body))
 	}
 
 	if dr.Wa.Qop == "auth" || dr.Wa.Qop == "" {

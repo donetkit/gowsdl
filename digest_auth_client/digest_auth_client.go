@@ -1,6 +1,7 @@
 package digest_auth_client
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -16,7 +17,7 @@ type BasicAuth struct {
 }
 
 type DigestRequest struct {
-	Body                io.Reader
+	Body                string
 	Method              string
 	Password            string
 	URI                 string
@@ -74,19 +75,26 @@ func (dr *DigestRequest) getHTTPClient() *http.Client {
 		Timeout:   dr.Timeout,
 		Transport: tr,
 	}
-
 }
 
 // UpdateRequest is called when you want to reuse an existing
 //
 //	DigestRequest connection with new request information
 func (dr *DigestRequest) UpdateRequest(username, password, method, uri string, body io.Reader) *DigestRequest {
-	dr.Body = body
 	dr.Method = method
 	dr.Password = password
 	dr.URI = uri
 	dr.Username = username
 	dr.Header = make(map[string][]string)
+
+	var buffer string
+	if body != nil {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(body)
+		buffer = buf.String()
+	}
+	dr.Body = buffer
+
 	return dr
 }
 
@@ -123,7 +131,7 @@ func (dr *DigestRequest) ExecuteContext(ctx context.Context) (resp *http.Respons
 		return dr.executeExistingDigest()
 	}
 	var req *http.Request
-	if req, err = http.NewRequest(dr.Method, dr.URI, dr.Body); err != nil {
+	if req, err = http.NewRequest(dr.Method, dr.URI, bytes.NewReader([]byte(dr.Body))); err != nil {
 		return nil, err
 	}
 
@@ -194,7 +202,7 @@ func (dr *DigestRequest) executeExistingDigest() (resp *http.Response, err error
 func (dr *DigestRequest) executeRequest(authString string) (resp *http.Response, err error) {
 	var req *http.Request
 
-	if req, err = http.NewRequest(dr.Method, dr.URI, dr.Body); err != nil {
+	if req, err = http.NewRequest(dr.Method, dr.URI, bytes.NewReader([]byte(dr.Body))); err != nil {
 		return nil, err
 	}
 	req.Header = dr.Header
