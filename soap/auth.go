@@ -64,13 +64,49 @@ func HttpDigestAuthGetSnapshotImage(url, username, password string) ([]byte, err
 
 	resp, err = client.Do(req)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			panic(err)
+			return nil, err
+		}
+		return body, nil
+	}
+	return nil, fmt.Errorf("response status code '%v'", resp.StatusCode)
+}
+
+// HttpDigestAuthGetSnapshotImageClient 通过http digest 认证方式获取设备快照,返回图片二进制
+func HttpDigestAuthGetSnapshotImageClient(url, username, password string, client *http.Client) ([]byte, error) {
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		return nil, fmt.Errorf("recieved status code '%d' auth skipped", resp.StatusCode)
+	}
+	digestParts := digestParts(resp)
+	digestParts["uri"] = url
+	digestParts["method"] = "GET"
+	digestParts["username"] = username
+	digestParts["password"] = password
+	req, _ = http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", getDigestAuthorization(digestParts))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
 		}
 		return body, nil
 	}
