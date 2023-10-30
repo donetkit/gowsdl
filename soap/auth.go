@@ -94,7 +94,7 @@ func HttpDigestAuthGetSnapshotImageClient(urlHttp, username, password string, cl
 	digestUrl := urlHttp
 	urlData, err := url.Parse(urlHttp)
 	if err == nil {
-		digestUrl = urlData.Path + urlData.RawQuery
+		digestUrl = urlData.Path + "?" + urlData.RawQuery
 	}
 
 	digestParts := digestParts(resp)
