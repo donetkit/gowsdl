@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -78,8 +79,8 @@ func HttpDigestAuthGetSnapshotImage(url, username, password string) ([]byte, err
 }
 
 // HttpDigestAuthGetSnapshotImageClient 通过http digest 认证方式获取设备快照,返回图片二进制
-func HttpDigestAuthGetSnapshotImageClient(url, username, password string, client *http.Client) ([]byte, error) {
-	req, _ := http.NewRequest("GET", url, nil)
+func HttpDigestAuthGetSnapshotImageClient(urlHttp, username, password string, client *http.Client) ([]byte, error) {
+	req, _ := http.NewRequest("GET", urlHttp, nil)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -89,12 +90,19 @@ func HttpDigestAuthGetSnapshotImageClient(url, username, password string, client
 	if resp.StatusCode != http.StatusUnauthorized {
 		return nil, fmt.Errorf("recieved status code '%d' auth skipped", resp.StatusCode)
 	}
+
+	digestUrl := urlHttp
+	urlData, err := url.Parse(urlHttp)
+	if err == nil {
+		digestUrl = urlData.Path + urlData.RawQuery
+	}
+
 	digestParts := digestParts(resp)
-	digestParts["uri"] = url
+	digestParts["uri"] = digestUrl
 	digestParts["method"] = "GET"
 	digestParts["username"] = username
 	digestParts["password"] = password
-	req, _ = http.NewRequest("GET", url, nil)
+	req, _ = http.NewRequest("GET", urlHttp, nil)
 	req.Header.Set("Authorization", getDigestAuthorization(digestParts))
 	req.Header.Set("Content-Type", "application/json")
 
