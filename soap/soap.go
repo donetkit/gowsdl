@@ -455,7 +455,7 @@ func (s *Client) CallContextWithAttachmentsAndFaultDetail(ctx context.Context, s
 	return s.call(ctx, soapAction, request, response, faultDetail, attachments)
 }
 
-// CallContextWithFault performs HTTP POST request.
+// CallContextWithFaultDetail CallContextWithFault performs HTTP POST request.
 // Note that if SOAP fault is returned, it will be stored in the error.
 func (s *Client) CallContextWithFaultDetail(ctx context.Context, soapAction string, request, response interface{}, faultDetail FaultError) error {
 	return s.call(ctx, soapAction, request, response, faultDetail, nil)
@@ -683,6 +683,134 @@ func (s *Client) callAuth(ctx context.Context, soapAction string, request, respo
 
 	if len(authorization) > 0 {
 		req.Header.Add("Authorization", authorization)
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 401 {
+		return s.callSecurity(ctx, soapAction, request, response, faultDetail, retAttachments)
+	}
+
+	if res.StatusCode >= 400 {
+		return ExtractError(res)
+	}
+
+	// xml Decoder (used with and without MTOM) cannot handle namespace prefixes (yet),
+	// so we have to use a namespace-less response envelope
+	respEnvelope := new(SOAPEnvelopeResponse)
+	respEnvelope.Body = SOAPBodyResponse{
+		Content: response,
+	}
+
+	mtomBoundary, err := getMtomHeader(res.Header.Get("Content-Type"))
+	if err != nil {
+		return err
+	}
+
+	var mmaBoundary string
+	if s.opts.mma {
+		mmaBoundary, err = getMmaHeader(res.Header.Get("Content-Type"))
+		if err != nil {
+			return err
+		}
+	}
+
+	var dec SOAPDecoder
+	if mtomBoundary != "" {
+		dec = newMtomDecoder(res.Body, mtomBoundary)
+	} else if mmaBoundary != "" {
+		dec = newMmaDecoder(res.Body, mmaBoundary)
+	} else {
+		dec = xml.NewDecoder(NewValidUTF8Reader(res.Body))
+	}
+
+	if err := dec.Decode(respEnvelope); err != nil {
+		return err
+	}
+
+	if respEnvelope.Attachments != nil {
+		*retAttachments = respEnvelope.Attachments
+	}
+	return respEnvelope.Body.ErrorFromFault()
+}
+
+func (s *Client) callSecurity(ctx context.Context, soapAction string, request, response interface{}, faultDetail FaultError,
+	retAttachments *[]MIMEMultipartAttachment) error {
+	// SOAP envelope capable of namespace prefixes
+	envelope := SOAPEnvelope{}
+
+	headers := append([]any{}, s.headers...)
+	if s.opts.soapAuth != nil {
+		sec := NewSecurity(s.opts.soapAuth.Login, s.opts.soapAuth.Password)
+		headers = append(headers, sec)
+	}
+	if len(headers) > 0 {
+		envelope.Header = &SOAPHeader{
+			Headers: headers,
+		}
+	}
+
+	envelope.Body.Content = request
+	buffer := new(bytes.Buffer)
+	var encoder SOAPEncoder
+	if s.opts.mtom && s.opts.mma {
+		return fmt.Errorf("cannot use MTOM (XOP) and MMA (MIME Multipart Attachments) option at the same time")
+	} else if s.opts.mtom {
+		encoder = newMtomEncoder(buffer)
+	} else if s.opts.mma {
+		encoder = newMmaEncoder(buffer, s.attachments)
+	} else {
+		encoder = xml.NewEncoder(buffer)
+	}
+
+	if err := encoder.Encode(envelope); err != nil {
+		return err
+	}
+
+	if err := encoder.Flush(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", s.url, buffer)
+	if err != nil {
+		return err
+	}
+	if s.opts.auth != nil {
+		req.SetBasicAuth(s.opts.auth.Login, s.opts.auth.Password)
+	}
+
+	req = req.WithContext(ctx)
+
+	if s.opts.mtom {
+		req.Header.Add("Content-Type", fmt.Sprintf(mtomContentType, encoder.(*mtomEncoder).Boundary()))
+	} else if s.opts.mma {
+		req.Header.Add("Content-Type", fmt.Sprintf(mmaContentType, encoder.(*mmaEncoder).Boundary()))
+	} else {
+		req.Header.Add("Content-Type", "application/soap+xml; charset=\"utf-8\"")
+	}
+	req.Header.Set("User-Agent", "gowsdl/0.1")
+	if s.opts.httpHeaders != nil {
+		for k, v := range s.opts.httpHeaders {
+			req.Header.Set(k, v)
+		}
+	}
+	req.Close = true
+
+	client := s.opts.client
+	if client == nil {
+		tr := &http.Transport{
+			TLSClientConfig: s.opts.tlsCfg,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				d := net.Dialer{Timeout: s.opts.timeout}
+				return d.DialContext(ctx, network, addr)
+			},
+			TLSHandshakeTimeout: s.opts.tlshshaketimeout,
+		}
+		client = &http.Client{Timeout: s.opts.contimeout, Transport: tr}
 	}
 
 	res, err := client.Do(req)
