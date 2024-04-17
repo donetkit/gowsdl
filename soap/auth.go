@@ -87,6 +87,15 @@ func HttpDigestAuthGetSnapshotImageClient(urlHttp, username, password string, cl
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return body, nil
+	}
+
 	if resp.StatusCode != http.StatusUnauthorized {
 		return nil, fmt.Errorf("recieved status code '%d' auth skipped", resp.StatusCode)
 	}
